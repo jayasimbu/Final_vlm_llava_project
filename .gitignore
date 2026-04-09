@@ -1,0 +1,7 @@
+credentials.json
+.env
+.venv/
+__pycache__/
+app/__pycache__/
+model/__pycache__/
+utils/__pycache__/
