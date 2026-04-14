@@ -1,75 +1,74 @@
-import os
-from dotenv import load_dotenv
-import requests
-import time
 import base64
+import logging
+import os
+import time
+
+import requests
+from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
 HF_TOKEN = os.getenv("HF_TOKEN")
-headers = {
-    "Authorization": f"Bearer {HF_TOKEN}"
-}
 
-LLAVA_URL = "https://router.huggingface.co/hf-inference/models/llava-hf/llava-v1.6-mistral-7b-hf"
-BLIP2_URL = "https://api-inference.huggingface.co/models/Salesforce/blip2-flan-t5-xl"
+LLAVA_CHAT_URL = "https://router.huggingface.co/v1/chat/completions"
+LLAVA_MODEL_ID = "Qwen/Qwen3-VL-8B-Instruct"
 
-def query_model(url, image_bytes, prompt):
+def query_llava(image_bytes: bytes, prompt: str) -> str:
+    """Query LLaVA model via Hugging Face API with image and text prompt.
+    
+    Implements exponential backoff retry logic (3 attempts with 5s delays).
+    
+    Args:
+        image_bytes: Image data as bytes
+        prompt: Text prompt for the model
+        
+    Returns:
+        Model response or error string prefixed with 'LLAVA_ERROR'
+    """
     for attempt in range(3):
         try:
-            # 1. Base64 Encode the image
             image_b64 = base64.b64encode(image_bytes).decode("utf-8")
-            
-            # 2. Format specifically if it's LLaVA to ensure it "sees" the image token
-            if "llava" in url.lower():
-                final_prompt = f"USER: <image>\n{prompt}\nASSISTANT:"
-            else:
-                final_prompt = prompt
-
-            # 3. Build JSON payload
             payload = {
-                "inputs": final_prompt,
-                "image": image_b64
+                "model": LLAVA_MODEL_ID,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}}
+                        ]
+                    }
+                ],
+                "max_tokens": 256,
+                "temperature": 0.1
             }
-            
-            # 4. Send as JSON! (Fixes IncompleteRead errors)
+
             response = requests.post(
-                url,
-                headers=headers,
-                json=payload,  
+                LLAVA_CHAT_URL,
+                headers={
+                    "Authorization": f"Bearer {HF_TOKEN}",
+                    "Content-Type": "application/json"
+                },
+                json=payload,
                 timeout=120
             )
 
             data = response.json()
 
-            # 🔥 handle loading
-            if isinstance(data, dict) and "error" in data:
-                if "loading" in data["error"].lower():
-                    print("Model loading... retrying")
-                    time.sleep(5)
-                    continue
-                else:
-                    return f"HF_ERROR_{data['error']}"
+            if response.status_code != 200:
+                err_msg = data.get("error", {}).get("message", str(data)) if isinstance(data, dict) else str(data)
+                return f"LLAVA_ERROR_{err_msg}"
 
-            if response.status_code == 200:
-                if isinstance(data, list) and len(data) > 0 and "generated_text" in data[0]:
-                    return data[0]["generated_text"]
-                elif isinstance(data, dict) and "generated_text" in data:
-                    return data["generated_text"]
-                return str(data)
+            choices = data.get("choices", []) if isinstance(data, dict) else []
+            if choices and "message" in choices[0]:
+                return choices[0]["message"].get("content", "")
+
+            return "LLAVA_ERROR_Empty response"
 
         except Exception as e:
-            print(f"Error: {e}")
+            logger.error(f"LLaVA request failed (attempt {attempt + 1}/3): {e}")
+            time.sleep(5)
 
-        time.sleep(5)
-
-    return "HF_ERROR"
-
-def query_llava(image_bytes, prompt):
-    res = query_model(LLAVA_URL, image_bytes, prompt)
-    if res.startswith("HF_ERROR"):
-        return res.replace("HF_ERROR", "LLAVA_ERROR")
-    return res
-
-def query_huggingface(image_bytes, prompt):
-    return query_model(BLIP2_URL, image_bytes, prompt)
+    return "LLAVA_ERROR"

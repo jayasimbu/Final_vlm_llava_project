@@ -1,44 +1,38 @@
-from fastapi import FastAPI, UploadFile, File
+import io
+
+from PIL import Image
+from fastapi import FastAPI, File, UploadFile
+
 from model.vlm_model import extract_invoice_details
 from utils.google_sheets import save_to_sheet
 from utils.image_optimizer import optimize_image
-from PIL import Image
-import io
 
 app = FastAPI(
-    title="VLM Invoice API (Final Clean Architecture)",
-    description="Minimal Image-to-Excel API without Frontend"
+    title="VLM Invoice API",
+    description="Image extraction API using Vision Language Models"
 )
 
 @app.post("/extract")
-async def extract(file: UploadFile = File(...)):
-    """
-    💻 app/main.py (FINAL CLEAN VERSION)
-    Accepts an image, extracts details via VLM, and saves to Excel.
-    """
-    contents = await file.read()
+async def extract(file: UploadFile = File(...)) -> dict:
+    """Extract invoice details from uploaded image and save to Google Sheets.
     
+    Args:
+        file: Image file to process (PNG, JPEG, AVIF, etc.)
+        
+    Returns:
+        dict: Extraction results with status, extracted data, and sync status.
+    """
     try:
-        # 🔥 Optimize image (Critical for HF stability)
+        contents = await file.read()
         contents = optimize_image(contents)
-        
-        # 🔥 Convert to PIL Image for Local Model Fallback
         image = Image.open(io.BytesIO(contents)).convert("RGB")
-        
-        # HYBRID Extraction (HF Cloud -> Local Fallback)
         data = extract_invoice_details(image, contents)
     except Exception as e:
-        print(f"Extraction failed: {e}")
-        return {"error": str(e)}
+        return {"status": "error", "error": str(e)}
 
-    # 🔥 Save to Google Sheets (Cloud)
     sheet_status = save_to_sheet(data)
 
-    return {
-        "status": "success",
-        "data": data,
-        "gsheets_synced": sheet_status
-    }
+    return {"status": "success", "data": data, "gsheets_synced": sheet_status}
 
 if __name__ == "__main__":
     import uvicorn

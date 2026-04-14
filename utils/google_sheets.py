@@ -1,10 +1,11 @@
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+import logging
 import os
 
-# Configuration
-# 👉 Ensure your Google Sheet is named exactly "Invoice Data"
-SHEET_NAME = "Invoice Data"
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+
+logger = logging.getLogger(__name__)
+
 CREDENTIALS_FILE = "credentials.json"
 
 scope = [
@@ -12,19 +13,25 @@ scope = [
     "https://www.googleapis.com/auth/drive"
 ]
 
-def save_to_sheet(data):
-    """
-    Appends extracted invoice data to a Google Sheet using oauth2client.
+def save_to_sheet(data: dict) -> bool:
+    """Append extracted invoice data to configured Google Sheet.
+    
+    Requires credentials.json with valid Google service account credentials.
+    
+    Args:
+        data: Dictionary with vendor_name, invoice_number, date, total_amount
+        
+    Returns:
+        True if successful, False on error
     """
     if not os.path.exists(CREDENTIALS_FILE):
-        print(f"ERROR: {CREDENTIALS_FILE} not found!")
+        logger.error(f"Credentials file not found: {CREDENTIALS_FILE}")
         return False
 
     try:
         creds = ServiceAccountCredentials.from_json_keyfile_name(CREDENTIALS_FILE, scope)
         client = gspread.authorize(creds)
         
-        # Open by ID (more reliable than name)
         sheet = client.open_by_key("1eHFLuVtFvN_tKi101uETfqSthMQanENhWKIHOmNU2gY").sheet1
 
         row = [
@@ -35,9 +42,9 @@ def save_to_sheet(data):
         ]
 
         sheet.append_row(row)
-        print("SUCCESS: Data saved to Google Sheets!")
+        logger.info("Data saved to Google Sheets")
         return True
 
     except Exception as e:
-        print(f"FAILED: Google Sheets Error: {e}")
+        logger.error(f"Google Sheets error: {e}")
         return False
