@@ -23,3 +23,7 @@ dist/
 Thumbs.db
 .vscode/
 .idea/
+
+# Local secrets
+.env
+credentials.json
