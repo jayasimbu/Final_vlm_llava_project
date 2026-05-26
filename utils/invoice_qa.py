@@ -12,15 +12,18 @@ def answer_invoice_question(invoice_data, question):
     if not q:
         return "Please ask a valid question."
 
-    gst = _clean_value(invoice_data.get("gst"))
+    # Map tax to gst as they are used interchangeably here
+    tax_val = invoice_data.get("tax")
+    gst = _clean_value(invoice_data.get("gst") or tax_val)
     payment_method = _clean_value(invoice_data.get("payment_method"))
     invoice_number = _clean_value(invoice_data.get("invoice_number"))
     vendor_name = _clean_value(invoice_data.get("vendor_name"))
-    invoice_date = _clean_value(invoice_data.get("date"))
+    invoice_date = _clean_value(invoice_data.get("invoice_date") or invoice_data.get("date"))
+    invoice_time = _clean_value(invoice_data.get("invoice_time") or invoice_data.get("time"))
     total_amount = _clean_value(invoice_data.get("total_amount"))
     subtotal = _clean_value(invoice_data.get("subtotal"))
     discount = _clean_value(invoice_data.get("discount"))
-    tax = _clean_value(invoice_data.get("tax"))
+    tax = _clean_value(tax_val)
     billing_address = _clean_value(invoice_data.get("billing_address"))
     shipping_address = _clean_value(invoice_data.get("shipping_address"))
     items = invoice_data.get("items") if isinstance(invoice_data.get("items"), list) else []
@@ -39,6 +42,9 @@ def answer_invoice_question(invoice_data, question):
 
     if "date" in q:
         return invoice_date
+
+    if "time" in q:
+        return invoice_time
 
     if "subtotal" in q:
         return subtotal
@@ -81,6 +87,6 @@ def answer_invoice_question(invoice_data, question):
         return "; ".join(summary) if summary else "Not found"
 
     return (
-        "I can answer GST, payment method, invoice number, vendor, date, subtotal, discount, tax, "
+        "I can answer GST, payment method, invoice number, vendor, date, time, subtotal, discount, tax, "
         "billing/shipping address, items, and total amount."
     )

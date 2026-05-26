@@ -5,8 +5,13 @@ def _empty_payload(error_message=None):
     payload = {
         "invoice_number": None,
         "invoice_date": None,
+        "invoice_time": None,
         "vendor_name": None,
+        "subtotal": None,
+        "discount": None,
+        "tax": None,
         "total_amount": None,
+        "items": []
     }
     if error_message:
         payload["error"] = error_message
